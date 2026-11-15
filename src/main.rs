@@ -1,8 +1,10 @@
 #![no_std]
 #![no_main]
+#![no_builtins]
 
 use core::ffi::c_void;
 use core::panic::PanicInfo;
+use core::arch::global_asm;
 pub mod logger;
 mod ram;
 use ram::CpuRam;
@@ -14,6 +16,9 @@ change the read and writes to volatile read and writes and
 also check the mem functions one more time just in case
 also check to make sure the stack isn't overflowing whenever I am doing RAM stuff (Check GPT)
 */
+
+
+
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn memcmp(ptr1: *const c_void, ptr2: *const c_void, count: usize) -> i32 {
@@ -64,7 +69,7 @@ pub unsafe extern "C" fn memset(
 
     for i in 0..count {
         unsafe {
-            dest.add(i).write(value as u8);
+            dest.add(i).write_volatile(value as u8);
         }
     }
     dest as *mut c_void
@@ -86,14 +91,23 @@ pub unsafe extern "C" fn memcpy(dest: *mut c_void, src: *const c_void, n: usize)
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_eh_personality() {}
 
+
+global_asm!(
+    ".globl _start",
+    "_start:",
+    "and rsp, -16",
+    "call r_main",
+    "ud2",
+);
+
 #[unsafe(no_mangle)]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn r_main() -> ! {
     let mut testram: CpuRam = CpuRam {
         ram_data: [0; 0x10000],
     };
     Bus::ram_write(0xAB23, 123, &mut testram);
     let data: u8 = Bus::ram_read(0xAB23, false, &testram);
-    println!("testing_data: {}", data);
+    println!("data: {}", data);
     logger::exit_syscall(0);
 }
 
