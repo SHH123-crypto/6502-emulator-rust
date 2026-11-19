@@ -16,6 +16,5 @@ pub fn test_ram(ram_d: CpuRam) {
     for (addr, data) in ram_d.ram_data.iter().enumerate() {
         if *data != 0 {
             crate::println!("{} at {}", addr, ram_d.ram_data[addr]);
-        }
     }
 }

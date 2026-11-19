@@ -2,23 +2,20 @@
 #![no_main]
 #![no_builtins]
 
+use core::arch::global_asm;
 use core::ffi::c_void;
 use core::panic::PanicInfo;
-use core::arch::global_asm;
-pub mod logger;
-mod ram;
-use ram::CpuRam;
 pub mod CPUMain;
+pub mod logger;
 use CPUMain::Bus;
+use CPUMain::RAM;
+use CPUMain::mosCPU;
 
 /*
 change the read and writes to volatile read and writes and
 also check the mem functions one more time just in case
 also check to make sure the stack isn't overflowing whenever I am doing RAM stuff (Check GPT)
 */
-
-
-
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn memcmp(ptr1: *const c_void, ptr2: *const c_void, count: usize) -> i32 {
@@ -60,11 +57,7 @@ pub unsafe extern "C" fn memmove(dest: *mut c_void, src: *const c_void, len: usi
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn memset(
-    dest: *mut c_void,
-    value: i32,
-    count: usize,
-) -> *mut c_void {
+pub unsafe extern "C" fn memset(dest: *mut c_void, value: i32, count: usize) -> *mut c_void {
     let dest = dest as *mut u8;
 
     for i in 0..count {
@@ -91,7 +84,6 @@ pub unsafe extern "C" fn memcpy(dest: *mut c_void, src: *const c_void, n: usize)
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_eh_personality() {}
 
-
 global_asm!(
     ".globl _start",
     "_start:",
@@ -102,12 +94,19 @@ global_asm!(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn r_main() -> ! {
-    let mut testram: CpuRam = CpuRam {
-        ram_data: [0; 0x10000],
-    };
-    Bus::ram_write(0xAB23, 123, &mut testram);
-    let data: u8 = Bus::ram_read(0xAB23, false, &testram);
-    println!("data: {}", data);
+    /*
+    Currently we have to keep our global variables immutable simply because
+    rust doesn't allow us to make them mutable and change stuff within them
+    we have to find a workaround exact error is shared reference to mutable static
+    so we have made the global variables immutable for now
+    */
+    unsafe {
+        CPUMain::mosCPU.cpu_reset();
+        let test_flag: CPUMain::Flags6502 = CPUMain::Flags6502::D;
+        assert_eq!(CPUMain::mosCPU.status, 0);
+        CPUMain::mosCPU.set_flag(test_flag, true);
+        assert_eq!(CPUMain::mosCPU.status, 0x8);
+    }
     logger::exit_syscall(0);
 }
 

@@ -1,41 +1,46 @@
-use crate::ram;
-use ram::CpuRam;
+use core::ops::Not;
 
+pub static mosCPU: cpuReg = cpuReg {
+    a: 0x00,
+    x: 0x00,
+    y: 0x00,
+    stkp: 0x00,
+    pc: 0x0000,
+    status: 0x00,
+};
 
-
-
-pub static mut mosCPU: cpuReg = cpuReg {
-    a = 0x00,
-    x = 0x00,  
-    y = 0x00,  
-    stkp = 0x00,  
-    pc = 0x0000, 
-    status = 0x00, 
+#[derive(Copy, Clone, Debug)]
+pub struct CpuRam {
+    pub ram_data: [u8; 0x10000],
 }
 
-
+impl CpuRam {
+    pub fn ram_clear(&mut self) {
+        self.ram_data = [0; 0x10000];
+    }
+}
 pub static mut RAM: CpuRam = CpuRam {
     ram_data: [0; 0x10000],
 };
 
 pub mod Bus {
-    use super::CpuRam;
+
     use super::RAM;
 
     pub fn ram_read(addr: u16) -> u8 {
         //this needs to read from ram
-        return RAM.ram_data[addr as usize]; //the testram parameter is temporary, delete it and use the RAM var
+        unsafe { RAM.ram_data[addr as usize] }
     }
 
     pub fn ram_write(addr: u16, data: u8) {
         //this needs to write to ram
         //unsafe {
-        RAM.ram_data[addr as usize] = data;
+        unsafe {
+            RAM.ram_data[addr as usize] = data;
+        }
         //}
     }
-
 }
-
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -50,31 +55,40 @@ pub enum Flags6502 {
     N = 1 << 7, // Negative
 }
 
-pub struct cpuReg {
-        a: u8, //A register
-        x: u8, //X register
-        y: u8,  //Y register
-        stkp: u8,  //Stack Pointer (Points to location on Bus)
-        pc: u16, //Program Counter
-        status: u8, //Status register       
+impl Not for Flags6502 {
+    type Output = u8;
+
+    fn not(self) -> Self::Output {
+        !(self as u8)
+    }
 }
-//implement the Bus trait
+
+pub struct cpuReg {
+    a: u8,          //A register
+    x: u8,          //X register
+    y: u8,          //Y register
+    stkp: u8,       //Stack Pointer (Points to location on Bus)
+    pc: u16,        //Program Counter
+    pub status: u8, //Status register
+}
 
 impl cpuReg {
-    use super::RAM;
-
-    pub fn get_flag(&self, flag: Flags6502) {
+    pub fn get_flag(&self, flag: Flags6502) -> bool {
         self.status & flag as u8 != 0
     }
 
     pub fn set_flag(&mut self, flag: Flags6502, value: bool) {
-
+        if value {
+            self.status |= flag as u8;
+        } else {
+            self.status &= !flag as u8;
+        }
     }
 
-    pub fn ram_reset(&mut self) {
+    pub fn cpu_reset(&mut self) {
         let addr_abs: u16 = 0xFFFC;
-        let lo: u16 = read(addr_abs + 0);
-        let hi: u16 = read(addr_abs + 1);  
+        let lo: u16 = Bus::ram_read(addr_abs + 0).into();
+        let hi: u16 = Bus::ram_read(addr_abs + 1).into();
         self.pc = (hi << 8) | lo;
         self.a = 0;
         self.x = 0;
@@ -82,6 +96,4 @@ impl cpuReg {
         self.stkp = 0xFD;
         self.status = 0x00;
     }
-
-
 }
